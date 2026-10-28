@@ -40,16 +40,29 @@ const HINT = {
   2: ['장 표지: 함께 정하기(진행자 노트북)', '확대: 진행자 노트북의 "회의가 5분 남았어요" 알림', 'TV에 띄우기 탭 → 회의실 사진 전체, TV에 화면이 뜸', '확대: TV 속 두 안 비교 카드, 코안이 결과물 생성', '확대 유지: A안, 팀 Figma 어드민 화면에 적용한 미리보기', '확대 유지: B안, 바뀔 코드와 일정(아래로 스크롤)', '전체로 빠짐 → B안 선택 탭 → 확대: 맡은 사람의 할 일 줄', '전체(천천히 빠짐): 남은 결정 없이 정리된 목록'],
   3: ['장 표지: 각자 확인(담당자 태호 노트북)', '확대: 오른쪽 "확인할 일이 하나 있어요" 카드 → 열기 탭', '확대: 왼쪽 근거, 회의에서 본인이 한 말 인용', '확인 탭 → 확대: 오른쪽 확정 표시', '확대: Figma 브랜치·변경 로그·개발 티켓 초안(천천히 스크롤)', '전체: 회의 기록 화면으로 전환', '근거 보기 탭: 그때 한 말 원문', '전체(천천히 빠짐): 결정과 담당이 남은 기록'],
 };
+// 왼쪽 단계 목록에서 문장마다 불이 켜지는 단계(film.html의 beat() 호출 순서를 그대로 읽음)
+function steps() {
+  const s = readFileSync(`${PROTO}/film.html`, 'utf8'), seg = s.slice(s.indexOf('const CHAPTERS'), s.indexOf('const PAGES='));
+  const titles = [...s.matchAll(/beats:\[([\s\S]*?)\]\]/g)].map(m => [...m[1].matchAll(/\['([^']*)'/g)].map(x => x[1]));
+  const out = {}; let ch = 0, b = -1;
+  for (const m of seg.matchAll(/(\d):async t=>\{|beat\((\d),\d\)|await cue\('/g)) {
+    if (m[1]) { ch = m[1]; b = -1; out[ch] = ['표지라 아직 불 켜진 단계 없음'] }
+    else if (m[2]) b = +m[2];
+    else out[ch].push(b < 0 ? '' : `왼쪽 ${'①②③'[b]} ${titles[ch - 1][b]}`);
+  }
+  return out;
+}
+const hints = () => { const st = steps(), o = { ...HINT }; for (const k of ['1', '2', '3']) o[k] = HINT[k].map((h, i) => st[k]?.[i] ? `${h}  |  ${st[k][i]}` : h); return o };
 let pushing = false;
 function build() {
-  const data = { stamp: Date.now(), static: deck(), video: videoTimes(), hint: HINT };
+  const data = { stamp: Date.now(), static: deck(), video: videoTimes(), hint: hints() };
   const old = (() => { try { return JSON.parse(readFileSync(`${HERE}data.json`, 'utf8')) } catch { return {} } })();
   if (JSON.stringify([old.static, old.video]) === JSON.stringify([data.static, data.video])) data.stamp = old.stamp;   // 대본 그대로면 앱이 다시 받지 않게
   let s = readFileSync(`${PROTO}/prompter/prompter.src.html`, 'utf8');
   data.build = createHash('md5').update(s).digest('hex').slice(0, 10);   // 화면 코드 버전(바뀌면 앱이 새로고침)
   writeFileSync(`${HERE}data.json`, JSON.stringify(data));
   const head = readFileSync(`${HERE}index.html`, 'utf8').match(/<title>[\s\S]*?(?=<link rel="stylesheet")/)[0];
-  s = s.replace(/<title>[\s\S]*?(?=<link rel="stylesheet")/, head).replace('/*STATIC*/null', JSON.stringify(data.static)).replace('/*VIDEO*/null', JSON.stringify(data.video)).replace('/*STAMP*/0', data.stamp).replace('/*HINT*/null', JSON.stringify(HINT)).replace('/*BUILD*/', data.build);
+  s = s.replace(/<title>[\s\S]*?(?=<link rel="stylesheet")/, head).replace('/*STATIC*/null', JSON.stringify(data.static)).replace('/*VIDEO*/null', JSON.stringify(data.video)).replace('/*STAMP*/0', data.stamp).replace('/*HINT*/null', JSON.stringify(data.hint)).replace('/*BUILD*/', data.build);
   writeFileSync(`${HERE}index.html`, s);
   const g = (...a) => execFileSync('git', ['-c', 'user.name=IlYeoLee', '-c', 'user.email=star1004da@gmail.com', ...a], { cwd: HERE, stdio: 'inherit' });
   g('add', '-A');
@@ -93,9 +106,9 @@ else {
     const d = deck(), v = videoTimes(), names = { p0: '00 AI 워크플로우', p1: '01 문제 정의', p2: '02 경쟁 서비스', p3: '03 코안 소개', p4: '04 비주얼 시스템 (영상)', 1: '05 결정 정리 (영상)', 2: '06 함께 정하기 (영상)', 3: '07 각자 확인 (영상)' };
     const secs = { ...Object.fromEntries(['p0', 'p1', 'p2', 'p3'].map(k => [k, d[k].reduce((a, t) => a + (sp(t) + .9) * 1.1, 0)])), p4: v.p4.end, 1: v[1].end, 2: v[2].end, 3: v[3].end };
     const tot = Object.values(secs).reduce((a, b) => a + b, 0), fmt = x => `${Math.floor(x / 60)}분 ${Math.round(x % 60)}초`, esc = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-    const deckKeys = ['p0', 'p1', 'p2', 'p3', 'p4'], nh = readdirSync(HIST).length;
+    const HN = hints(), deckKeys = ['p0', 'p1', 'p2', 'p3', 'p4'], nh = readdirSync(HIST).length;
     const blocks = ['p0', 'p1', 'p2', 'p3', 'p4', '1', '2', '3'].map(k => { const L = deckKeys.includes(k) ? d[k] : v[k].cues.map(c => c[1]);
-      return `<section><h2>${names[k]} <small>약 ${Math.round(secs[k])}초</small></h2>${L.map((t, i) => `${HINT[k]?.[i] ? `<div class="hint">화면 · ${esc(HINT[k][i])}</div>` : ''}<div class="row"><textarea data-from="${esc(t)}" rows="2">${esc(t)}</textarea>${deckKeys.includes(k) ? '<button class="del" type="button">삭제</button>' : ''}</div>`).join('')}</section>` }).join('');
+      return `<section><h2>${names[k]} <small>약 ${Math.round(secs[k])}초</small></h2>${L.map((t, i) => `${HN[k]?.[i] ? `<div class="hint">화면 · ${esc(HN[k][i])}</div>` : ''}<div class="row"><textarea data-from="${esc(t)}" rows="2">${esc(t)}</textarea>${deckKeys.includes(k) ? '<button class="del" type="button">삭제</button>' : ''}</div>`).join('')}</section>` }).join('');
     res.setHeader('content-type', 'text/html; charset=utf-8');
     res.end(`<!doctype html><meta charset="utf-8"><title>코안 대본 편집</title><style>
 body{font:16px/1.6 -apple-system,"Apple SD Gothic Neo",sans-serif;max-width:900px;margin:0 auto;padding:0 20px 80px;background:#f6f7f9;color:#14171c}
