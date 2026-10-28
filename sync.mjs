@@ -1,7 +1,7 @@
 // 웹 대본(film.html) → 휴대폰 대본 앱 자동 반영. 30초마다 film.html이 바뀌었는지 보고, 바뀌면
 // 정지 페이지 대본을 뽑고 + 영상 페이지 시각을 실제 속도로 다시 재서(timing-rt.mjs, 약 2분) data.json·index.html을 만들고 GitHub에 올림
 // 사용: node sync.mjs (한 번)   node sync.mjs --watch (계속 감시)
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -33,6 +33,7 @@ function videoTimes() {
   out.p4 = { end: +(t + 1.2).toFixed(2), cues: p4 };
   return out;
 }
+let pushing = false;
 function build() {
   const data = { stamp: Date.now(), static: deck(), video: videoTimes() };
   const old = (() => { try { return JSON.parse(readFileSync(`${HERE}data.json`, 'utf8')) } catch { return {} } })();
@@ -47,9 +48,10 @@ function build() {
   g('add', '-A');
   if (execFileSync('git', ['status', '--porcelain'], { cwd: HERE }).toString().trim()) g('commit', '-qm', `대본 자동 반영 ${new Date().toTimeString().slice(0, 5)}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`);
   else if (!/ahead/.test(execFileSync('git', ['status', '-sb'], { cwd: HERE }).toString())) return console.log('바뀐 것 없음');
-  // 푸시가 가끔 몇 분씩 멈춰서, 60초 넘으면 끊고 다시(최대 3번)
-  for (let k = 0; k < 3; k++) try { execFileSync('git', ['push', '-q'], { cwd: HERE, stdio: 'inherit', timeout: 60000 }); break } catch (e) { console.error('푸시 재시도', k + 1) }
-  console.log('올림', new Date().toTimeString().slice(0, 8));
+  // 푸시는 뒤에서(편집 페이지가 안 멈추게). 가끔 몇 분씩 멈춰서 60초 넘으면 끊음 → 다음 변경 때 다시 올림
+  if (pushing) return; pushing = true;
+  const p = spawn('git', ['push', '-q'], { cwd: HERE, stdio: 'ignore' }), kill = setTimeout(() => p.kill(), 60000);
+  p.on('close', c => { clearTimeout(kill); pushing = false; console.log(c === 0 ? '올림' : '푸시 실패, 다음에 다시', new Date().toTimeString().slice(0, 8)) });
 }
 const mt = () => statSync(`${PROTO}/film.html`).mtimeMs + statSync(`${PROTO}/prompter/prompter.src.html`).mtimeMs;
 if (!process.argv.includes('--watch')) build();
