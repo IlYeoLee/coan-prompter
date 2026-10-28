@@ -14,8 +14,14 @@ function deck() {   // film.html의 PAGES(00~04 대본)
   return o;
 }
 function build() {
-  execFileSync('rm', ['-f', `${PROTO}/cues.json`]);
-  for (const c of ['p4', '1', '2', '3']) execFileSync('nice', ['-n', '19', 'node', 'timing-rt.mjs', c], { cwd: PROTO, stdio: 'inherit' });
+  // 영상 시각은 film.html이 바뀌었을 때만 다시 잼(화면만 바꾼 경우는 바로 올림)
+  const fm = String(statSync(`${PROTO}/film.html`).mtimeMs);
+  let measured = ''; try { measured = readFileSync(`${HERE}.measured`, 'utf8') } catch {}
+  if (fm !== measured) {
+    execFileSync('rm', ['-f', `${PROTO}/cues.json`]);
+    for (const c of ['p4', '1', '2', '3']) execFileSync('nice', ['-n', '19', 'node', 'timing-rt.mjs', c], { cwd: PROTO, stdio: 'inherit' });
+    writeFileSync(`${HERE}.measured`, fm);
+  }
   const data = { stamp: Date.now(), static: deck(), video: JSON.parse(readFileSync(`${PROTO}/cues.json`, 'utf8')) };
   const old = (() => { try { return JSON.parse(readFileSync(`${HERE}data.json`, 'utf8')) } catch { return {} } })();
   if (JSON.stringify([old.static, old.video]) === JSON.stringify([data.static, data.video])) data.stamp = old.stamp;   // 대본 그대로면 앱이 다시 받지 않게
