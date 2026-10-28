@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>코안 발표 대본</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="코안 대본">
+<meta name="theme-color" content="#0d1014">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* 한 화면 프롬프터: 위 = 페이지, 가운데 = 지금 말할 문장(크게), 아래 = 진행 표시와 버튼. 발표장에서 눈부시지 않게 어두운 화면 하나로 고정 */
+:root{
+  --bg:#0d1014; --panel:#171b21; --line:#262c35;
+  --fg:#f2f4f7; --dim:#7d8693; --faint:#4a525d;
+  --go:#3d8bff; --soon:#ffb020; --now:#2fd27a; --said:#9fc2ff;
+  --sans:"Noto Sans KR","Apple SD Gothic Neo",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.app{height:100%;display:grid;grid-template-rows:auto auto 1fr auto;gap:10px;
+  padding:max(10px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.pages{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.pages::-webkit-scrollbar{display:none}
+.pg{flex:none;border:1px solid var(--line);background:var(--panel);color:var(--dim);border-radius:10px;padding:7px 10px;font:500 12px/1.2 var(--sans)}
+.pg b{display:block;font-weight:700;font-size:15px;color:var(--fg);font-variant-numeric:tabular-nums}
+.pg.vid b::after{content:" ▶";font-size:10px;color:var(--go)}
+.pg[aria-current=true]{border-color:var(--go);color:var(--fg)}
+.enterbar{border-radius:14px;font-weight:700;font-size:22px;text-align:center;min-height:0}
+.enter .enterbar{background:var(--now);color:#06210f;padding:14px}
+.stage{display:flex;flex-direction:column;justify-content:center;gap:18px;min-height:0;overflow:hidden}
+.prev{color:var(--faint);font-size:16px;line-height:1.5;max-height:3em;overflow:hidden;word-break:keep-all}
+.cur{font-size:clamp(26px,7.4vw,40px);line-height:1.45;font-weight:700;word-break:keep-all;text-wrap:pretty}
+.cur .s{color:var(--said)}
+.next{color:var(--dim);font-size:19px;line-height:1.55;word-break:keep-all;max-height:4.7em;overflow:hidden}
+.next::before{content:"다음 ";color:var(--faint);font-size:13px;font-weight:700;margin-right:4px}
+.flash .cur{color:var(--now)}
+.meter{display:grid;gap:8px}
+.cd{display:flex;align-items:baseline;justify-content:space-between;font-variant-numeric:tabular-nums}
+.cd .big{font-size:44px;font-weight:700;line-height:1;color:var(--go)}
+.cd .lab{font-size:15px;color:var(--dim)}
+.bar{height:10px;border-radius:5px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;width:100%;background:var(--go);transform-origin:left}
+.soon .cd .big,.soon .cd .lab{color:var(--soon)}.soon .bar i{background:var(--soon)}
+.mic{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--dim);min-height:22px}
+.mic i{width:10px;height:10px;border-radius:50%;background:var(--faint)}
+.mic.on i{background:var(--now);box-shadow:0 0 0 4px rgba(47,210,122,.18)}
+.heard{color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:rtl;text-align:left;flex:1;min-width:0}
+.clock{font-variant-numeric:tabular-nums;color:var(--faint);font-size:13px;text-align:right}
+.ctl{display:grid;grid-template-columns:1fr 1fr 1.6fr 1fr 1fr;gap:8px;margin-top:10px}
+.ctl button{height:58px;border-radius:14px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:500 15px var(--sans)}
+.ctl button:active{background:var(--line)}
+.ctl button:disabled{opacity:.35}
+.ctl .main{background:var(--go);border-color:var(--go);font-weight:700;font-size:17px}
+.paused .ctl .main{background:var(--now);border-color:var(--now);color:#06210f}
+button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <nav class="pages" id="pages" aria-label="페이지"></nav>
+  <div class="enterbar" id="enter" aria-live="assertive"></div>
+  <main class="stage" id="stage">
+    <div class="prev" id="prev"></div>
+    <div class="cur" id="cur" aria-live="polite"></div>
+    <div class="next" id="next"></div>
+  </main>
+  <section>
+    <div class="meter" id="meter" hidden>
+      <div class="cd"><span class="lab" id="lab"></span><span class="big" id="big"></span></div>
+      <div class="bar"><i id="bar"></i></div>
+    </div>
+    <div class="mic" id="mic"><i></i><span id="micT">마이크 꺼짐</span><span class="heard" id="heard"></span></div>
+    <div class="clock" id="clock"></div>
+    <div class="ctl">
+      <button id="bk">−1초</button>
+      <button id="pl">‹ 문장</button>
+      <button id="go" class="main">시작</button>
+      <button id="nl">문장 ›</button>
+      <button id="fw">+1초</button>
+    </div>
+  </section>
+</div>
+<script>
+// 00~04 = 정지 페이지: 내가 말하는 속도대로. 문장을 끝까지 말하면 음성인식이 알아듣고 넘김(화면 탭도 됨)
+// 05~07 = 영상 페이지: 영상과 같은 시각표대로 시계가 넘김. 페이지가 바뀌는 순간 "지금 Enter"(노트북에서 Enter만 누르면 됨)
+const STATIC = {"p0": ["코안은 판단은 제가 직접 하고, 반복은 Claude Code에 맡겨 만들었습니다.", "Discover에서는 상황과 불만 키워드로 사용자 글을 모아, 앱 리뷰에 없는 사람 사이의 문제를 찾았습니다.", "Define에서는 실제로 겪은 장면이 있는 글만 남기고, 가설에 기운 첫 판정은 가린 채 다시 판정했습니다.", "Develop에서는 디자인 시스템을 Figma와 코드에 같은 이름으로 만들고, 웹에서 직접 검증했습니다.", "Deliver에서는 덱까지 등록한 스타일로만 정리하고, 인용과 수치는 원문과 대조했습니다.", "먼저, 찾은 문제부터 말씀드리겠습니다."], "p1": ["회의는 끝나도, 결정은 끝나지 않습니다.", "사용자 글 만 오천여 건에서, 실제로 겪은 장면이 담긴 글만 근거로 남겼습니다.", "첫째는 왜곡된 요약입니다. 조건부 찬성이 요약에는 그냥 동의로 적혔다는 글이 있었고, 설문에서는 48%가 AI 요약의 가장 큰 단점으로 부정확함을 꼽았습니다.", "그래서 회의 중에 미정을 따로 보여 주면, 미정이 합의로 바뀌는 일이 줄어든다는 가설을 세웠습니다.", "둘째는 미뤄진 확정입니다. 정한 내용이 다음 날 뒤집힙니다. 같이 정하고도 다음 날 다른 말을 한다는 글이 반복됐고, 55%가 다음 단계가 불명확하다고 답했습니다.", "그래서 끝나기 전에 함께 정하면, 다음 날에도 같은 결정이 남는다고 봤습니다.", "셋째는 모르는 담당입니다. 공유하겠다고 해 놓고 사흘째 소식이 없다는 글이 있었고, 54%가 다음 단계와 담당을 모른 채 자주 회의를 떠난다고 답했습니다.", "그래서 본인이 직접 확인하면, 맡은 일을 끝까지 챙긴다고 봤습니다."], "p2": ["기록하고 요약하는 AI는 많지만, 회의 안에서 확정을 돕는 AI는 없습니다.", "국내 받아쓰기 앱부터 회의 봇, 화상회의에 내장된 AI까지 열여섯 곳을 공식 문서로 비교했습니다.", "할 일 정리와 봇 없는 기록은 대부분 지원하지만, 결정 이유를 남기고, 먼저 미결을 묻고, 담당자가 직접 확인하는 기능을 온전히 갖춘 곳은 한 곳도 없었습니다. 일부만 되는 곳은 표에 따로 적어 두었습니다.", "가장 가까운 세 서비스는 따로 벤치마킹했습니다. 구글 미트에서는 결정을 상태로 나눠 보여 주는 방식을 가져왔습니다.", "팀즈 퍼실리테이터에서는 AI가 먼저 말을 거는 타이밍을, 줌에서는 버튼 한 번의 수락을 가져왔습니다.", "정리하면, 상태와 타이밍, 수락은 빌리고, 확정까지 잇는 흐름은 새로 만들었습니다."], "p3": ["코안은 회의가 끝나기 전에, 참석자 모두가 같은 결정을 확정하도록 돕는 AI 회의 동료입니다.", "목요일 디자인 시스템 회의를, 지금과 코안과 함께로 나눠 보겠습니다.", "첫째, 지금은 받아 적느라 대화에서 빠집니다. 코안과 함께면 말하는 동안 결정이 정리됩니다.", "둘째, 지금은 정할 것을 남긴 채 회의가 끝납니다. 코안과 함께면 끝나기 5분 전에 남은 결정을 함께 정합니다.", "셋째, 지금은 동의한 적 없는 결정이 굳어집니다. 코안과 함께면 이름이 걸린 사람이 확인해야 확정됩니다.", "이 세 장면이 그대로 세 핵심 화면, 결정 정리, 함께 정하기, 각자 확인이 됩니다."], "p4": ["의견을 잇는 선 하나가, 브랜드이자 화면의 규칙이 됩니다.", "코안은 함께 정하는 안이라는 뜻입니다. 논의 중에는 열린 C, 합의하면 닫힌 O가 됩니다.", "같은 선의 형태로, 듣기부터 합의까지 열두 가지 상태를 보여 줍니다.", "이 선은 컴포넌트의 규칙이 됩니다. 새 결정이 생기면 선이 테두리가 되고, 근거를 누르면 그 발언에 선이 그어집니다.", "디자인 시스템과 컴포넌트 라이브러리는 Figma와 코드에 같은 이름으로 만들어, 값 하나를 바꾸면 모든 화면이 함께 바뀝니다.", "이제 핵심 화면 세 개를 보여 드리겠습니다."]}, VIDEO = {"1": {"end": 41.28, "cues": [[0, "첫 번째 화면은 결정 정리입니다. 회의 중에 오간 말을 결정 목록으로 정리합니다."], [5.41, "회의 전, 코안이 안건마다 필요한 자료를 미리 붙여 둡니다."], [9.89, "이제 회의를 시작해 보겠습니다."], [13.34, "회의 화면입니다. 왼쪽은 대화 기록, 오른쪽은 결정 목록입니다."], [18.4, "누군가 제안하면 오른쪽에 정할 것이 생기고, 그에 대한 우려와 근거가 같은 줄에 모입니다."], [25.57, "의견이 갈리면, 두 안과 각 안을 주장한 말을 한 장에 나란히 정리합니다. 누가 왜 그 안을 원했는지, 다시 묻지 않아도 됩니다."], [33.8, "회의가 끝나기 전에, 무엇이 정해졌고 무엇이 남았는지가 한눈에 보입니다."]]}, "2": {"end": 42.49, "cues": [[0, "두 번째 화면은 함께 정하기입니다. 끝나기 5분 전에 남은 결정을 함께 정합니다."], [5.26, "회의가 5분 남았는데 못 정한 결정이 있으면, 진행자에게 알림이 옵니다."], [10.65, "TV에 띄우면, 회의실의 모두가 같은 화면을 봅니다."], [15.99, "코안은 두 안 중 하나를 골랐을 때 생길 일을 미리 보여 줍니다."], [20.36, "A안이면 바뀌는 어드민 화면을, 팀 Figma에 실제로 적용해 보여 주고,"], [25.31, "B안이면 바뀌는 코드와 일정까지 보여 줍니다. 추천은 하지 않고, 결정은 팀이 합니다."], [31.72, "팀이 B안을 고르면, 그 결정은 곧바로 맡은 사람의 할 일이 됩니다."], [37.82, "남은 결정은 다음 회의로 미뤄지지 않고, 그 자리에서 정해집니다."]]}, "3": {"end": 42.19, "cues": [[0, "세 번째 화면은 각자 확인입니다. 맡은 사람이 직접 결정을 확인합니다."], [4.39, "담당자에게는 자기 노트북으로 확인 요청이 옵니다."], [10.35, "회의에서 본인이 한 말이 근거로 붙어 있어서, 내용만 보고 확인하면 됩니다."], [16.23, "두 사람이 확인하면 결정이 확정되고,"], [22.88, "코안이 Figma 브랜치와 변경 로그, 개발 티켓 초안을 써 둡니다. 담당자는 검토하고 실행만 하면 됩니다."], [28.25, "회의가 끝나면 모든 결정이 기록으로 남고,"], [31.7, "근거 보기로, 그때 한 말을 언제든 다시 확인할 수 있습니다."], [36.55, "결국 누가 무엇을 맡았는지가, 말이 아니라 기록으로 남습니다."]]}};
+const PAGES = [
+  ['p0','00','AI 워크플로우'],['p1','01','문제 정의'],['p2','02','벤치마킹'],['p3','03','코안 소개'],['p4','04','비주얼 시스템'],
+  ['1','05','결정 정리'],['2','06','함께 정하기'],['3','07','각자 확인']];
+const isVid = i => !!VIDEO[PAGES[i][0]];
+const $ = id => document.getElementById(id);
+let pi = 0, line = 0, playing = false, base = 0, t0 = 0, started = false;
+const V = () => VIDEO[PAGES[pi][0]];
+const lines = () => isVid(pi) ? V().cues.map(c => c[1]) : STATIC[PAGES[pi][0]];
+const now = () => playing ? base + (performance.now() - t0) / 1000 : base;
+const setT = s => { base = Math.max(0, Math.min(V().end, s)); t0 = performance.now() };
+const idxAt = s => { const c = V().cues; let k = 0; while (k + 1 < c.length && c[k + 1][0] <= s + 1e-3) k++; return k };
+
+$('pages').innerHTML = PAGES.map((p, i) => `<button class="pg${isVid(i) ? ' vid' : ''}" data-i="${i}"><b>${p[1]}</b>${p[2]}</button>`).join('');
+$('pages').onclick = e => { const b = e.target.closest('.pg'); if (b) openPage(+b.dataset.i, false) };
+
+let enterUntil = 0;
+function openPage(i, auto) {
+  pi = i; line = 0; resetHeard();
+  if (isVid(pi)) { playing = auto; setT(0) } else playing = false;
+  if (auto) { enterUntil = performance.now() + 1800; $('enter').textContent = `지금 Enter ⏎  ${PAGES[pi][1]} ${PAGES[pi][2]}` }
+  document.querySelectorAll('.pg').forEach((b, k) => b.setAttribute('aria-current', k === pi));
+  document.querySelector('.pg[aria-current=true]').scrollIntoView({ inline: 'center', block: 'nearest' });
+  last = -1;
+}
+// 다음 문장. 페이지 마지막 문장이면 다음 페이지로(영상 페이지면 시계 시작)
+const STAT = { 끝부분: 0, 멈춤: 0, 탭: 0 };   // 정지 페이지 문장이 무엇으로 넘어갔는지(연습 때 정확도 확인용)
+function advance(how = '탭') {
+  STAT[how]++;
+  if (line + 1 < lines().length) { line++; resetHeard(); last = -1; flash() }
+  else if (pi + 1 < PAGES.length) openPage(pi + 1, true);
+}
+function flash() { $('app').classList.add('flash'); setTimeout(() => $('app').classList.remove('flash'), 600) }
+
+const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+let last = -1;
+function draw() {
+  const vid = isVid(pi), L = lines();
+  if (vid) {
+    const k = idxAt(now()); if (k !== line) { if (k > line) flash(); line = k; last = -1 }
+  }
+  if (line !== last) {
+    $('prev').textContent = L[line - 1] || '';
+    $('next').textContent = L[line + 1] || (pi + 1 < PAGES.length ? `Enter ⏎ ${PAGES[pi + 1][1]} ${PAGES[pi + 1][2]}` : '끝');
+    last = line;
+  }
+  // 정지 페이지: 말한 만큼 문장 앞부분을 칠함
+  const cur = L[line] || '', upto = vid ? 0 : saidUpto(cur);
+  $('cur').innerHTML = `<span class="s">${esc(cur.slice(0, upto))}</span>${esc(cur.slice(upto))}`;
+  $('app').classList.toggle('enter', performance.now() < enterUntil);
+  $('meter').hidden = !vid;
+  $('bk').disabled = $('fw').disabled = !vid;
+  if (vid) {
+    const s = now(), c = V().cues, end = V().end, a = c[line][0], b = c[line + 1]?.[0] ?? end, left = Math.max(0, b - s);
+    $('big').textContent = left.toFixed(1);
+    $('lab').textContent = c[line + 1] ? '다음 문장까지' : pi + 1 < PAGES.length ? `Enter까지 → ${PAGES[pi + 1][1]}` : '끝까지';
+    $('bar').style.transform = `scaleX(${b > a ? left / (b - a) : 0})`;
+    $('app').classList.toggle('soon', left <= 2 && left > 0);
+    $('clock').textContent = `${PAGES[pi][1]} 영상 ${fmt(s)} / ${fmt(end)}${playing ? '' : ' · 멈춤'}`;
+    if (playing && s >= end) { if (pi + 1 < PAGES.length) openPage(pi + 1, true); else playing = false }
+    $('go').textContent = playing ? '멈춤' : '계속';
+  } else {
+    $('app').classList.remove('soon');
+    $('clock').textContent = `${PAGES[pi][1]} 페이지 ${line + 1} / ${L.length}문장 · 자동 ${STAT.끝부분 + STAT.멈춤}(끝부분 ${STAT.끝부분}, 멈춤 ${STAT.멈춤}) / 탭 ${STAT.탭}`;
+    $('go').textContent = started ? '다음 ›' : '시작';
+  }
+  $('app').classList.toggle('paused', vid && !playing);
+}
+const esc = t => t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+(function loop() { draw(); requestAnimationFrame(loop) })();
+
+// ---- 음성인식(브라우저 기본 기능, 무료). 지금 문장의 끝부분을 말했으면 다음 문장으로 ----
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, micOn = false, heard = '', finalBase = '';
+const norm = t => t.replace(/[^가-힣]/g, '');   // 한글만 비교(영어·숫자는 음성인식이 자주 틀려서 판정에서 뺌)
+const grams = t => { const g = new Set(); for (let i = 0; i + 1 < t.length; i++) g.add(t.slice(i, i + 2)); return g };
+const cover = (target, said) => { const g = [...grams(target)]; if (!g.length) return 1; const s = grams(said); return g.filter(x => s.has(x)).length / g.length };
+function resetHeard() { finalBase = heardAll; }
+let heardAll = '';
+// 말한 범위: 문장을 앞에서부터 늘려 가며 들은 말과 70% 이상 겹치는 가장 긴 앞부분
+function saidUpto(cur) {
+  const said = norm(heardAll.slice(finalBase.length)); if (!said) return 0;
+  let best = 0;
+  for (let i = 4; i <= cur.length; i += 2) if (cover(norm(cur.slice(Math.max(0, i - 10), i)), said) >= .7) best = i;
+  return best;
+}
+function check() {
+  if (isVid(pi)) return;
+  const cur = norm(lines()[line] || ''), said = norm(heardAll.slice(finalBase.length));
+  const tail = cur.slice(-Math.min(10, Math.ceil(cur.length / 3)));
+  // ① 끝부분까지 말했으면 바로 넘김
+  if (said.length >= cur.length * .5 && cover(tail, said.slice(-tail.length - 8)) >= .6) advance('끝부분');
+}
+// ② 문장의 60% 이상을 말하고 0.9초 동안 말이 없으면 넘김(끝부분을 잘못 알아들어도 숨 쉬는 틈으로 판단)
+let lastHeard = 0;
+setInterval(() => {
+  if (!micOn || isVid(pi) || !lastHeard || performance.now() - lastHeard < 900) return;
+  const cur = norm(lines()[line] || ''), said = norm(heardAll.slice(finalBase.length));
+  if (said && cover(cur, said) >= .6) { lastHeard = 0; advance('멈춤') }
+}, 150);
+function startMic() {
+  if (!SR) { $('micT').textContent = '이 브라우저는 음성인식이 안 돼요. 화면을 탭해서 넘겨요'; return }
+  rec = new SR(); rec.lang = 'ko-KR'; rec.continuous = true; rec.interimResults = true;
+  let done = '';
+  rec.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) done += r[0].transcript + ' '; else interim += r[0].transcript }
+    heardAll = prevSessions + done + interim; lastHeard = performance.now(); $('heard').textContent = heardAll.slice(-40); check();
+  };
+  rec.onend = () => { prevSessions += done; done = ''; if (micOn) try { rec.start() } catch {} };   // 아이폰은 조용하면 끊김 → 다시 켬
+  rec.onerror = e => { if (e.error === 'not-allowed') { micOn = false; $('micT').textContent = '마이크 권한이 없어요. 화면을 탭해서 넘겨요' } };
+  micOn = true; try { rec.start() } catch {}
+  $('mic').classList.add('on'); $('micT').textContent = '듣는 중';
+}
+let prevSessions = '';
+
+// ---- 버튼 ----
+$('go').onclick = () => {
+  if (!started) { started = true; startMic(); return }
+  if (isVid(pi)) { setT(now()); playing = !playing; t0 = performance.now() } else advance();
+};
+$('stage').onclick = () => { if (started && !isVid(pi)) advance() };
+$('bk').onclick = () => isVid(pi) && setT(now() - 1);
+$('fw').onclick = () => isVid(pi) && setT(now() + 1);
+const jump = d => {
+  if (isVid(pi)) { const c = V().cues, k = Math.max(0, Math.min(c.length - 1, idxAt(now()) + d)); setT(c[k][0]) }
+  else if (d > 0) advance(); else if (line > 0) { line--; resetHeard(); last = -1 } else if (pi > 0) { openPage(pi - 1, false); line = lines().length - 1 }
+};
+$('pl').onclick = () => jump(-1); $('nl').onclick = () => jump(1);
+$('mic').onclick = () => { if (!started) return; if (micOn) { micOn = false; rec?.stop(); $('mic').classList.remove('on'); $('micT').textContent = '마이크 꺼짐(탭하면 켜짐)' } else startMic() };
+const wake = () => navigator.wakeLock?.request('screen').catch(() => {});
+document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && wake());
+document.addEventListener('click', wake, { once: true });
+openPage(0, false);
+</script>
+</body>
+</html>
