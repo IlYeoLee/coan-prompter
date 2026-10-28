@@ -14,16 +14,25 @@ function deck() {   // film.html의 PAGES(00~04 대본)
   for (const k in P) o[k] = P[k].cues.map(c => Array.isArray(c) ? c[0] : c);
   return o;
 }
-function build() {
-  // 영상 시각은 film.html이 바뀌었을 때만 다시 잼(화면만 바꾼 경우는 바로 올림)
-  const fm = String(statSync(`${PROTO}/film.html`).mtimeMs);
-  let measured = ''; try { measured = readFileSync(`${HERE}.measured`, 'utf8') } catch {}
-  if (fm !== measured) {
-    execFileSync('rm', ['-f', `${PROTO}/cues.json`]);
-    for (const c of ['p4', '1', '2', '3']) execFileSync('nice', ['-n', '19', 'node', 'timing-rt.mjs', c], { cwd: PROTO, stdio: 'inherit' });
-    writeFileSync(`${HERE}.measured`, fm);
+// 영상 페이지 시각: 재생하지 않고 계산(film.html과 같은 말 속도). 문장 길이 = 말 + 0.9초, 화면 동작이 더 긴 문장은 잰 값(A)으로
+// 10-28 실측: 대부분 말이 길어 화면이 기다림. 동작이 더 긴 곳만 A에 적음(장마다 문장 순서, 0 = 말이 더 김)
+const A = { 1: [0, 0, 0, 0, 0, 0, 6.7], 2: [0, 0, 4.9, 0, 0, 0, 0, 5.6], 3: [0, 6.1, 0, 4.3, 0, 0, 0, 5.7] };
+function sp(t) { const R = 5.6; return [...t].reduce((a, c) => a + (/[가-힣0-9]/.test(c) ? 1 / R : /[A-Za-z]/.test(c) ? .8 / R : c === ',' ? .18 : /[.?!]/.test(c) ? .3 : 0), 0) }
+function videoTimes() {
+  const s = readFileSync(`${PROTO}/film.html`, 'utf8'), out = {};
+  const intros = [...s.matchAll(/intro:'([^']*)'/g)].map(m => m[1]), cues = [...s.matchAll(/cue\('([^']*)'/g)].map(m => m[1]);
+  const counts = { 1: 6, 2: 7, 3: 7 }; let k = 0;
+  for (const ch of ['1', '2', '3']) {
+    const lines = [intros[+ch - 1], ...cues.slice(k, k + counts[ch])]; k += counts[ch];
+    let t = 0; const c = lines.map((x, i) => { const at = t; t += Math.max(sp(x) + (i ? .9 : .3), A[ch][i] || 0); return [+at.toFixed(2), x] });
+    out[ch] = { end: +(t + .6).toFixed(2), cues: c };
   }
-  const data = { stamp: Date.now(), static: deck(), video: JSON.parse(readFileSync(`${PROTO}/cues.json`, 'utf8')) };
+  let t = .4; const p4 = deck().p4.map(x => { const at = t; t += sp(x) + .9; return [+at.toFixed(2), x] });
+  out.p4 = { end: +(t + 1.2).toFixed(2), cues: p4 };
+  return out;
+}
+function build() {
+  const data = { stamp: Date.now(), static: deck(), video: videoTimes() };
   const old = (() => { try { return JSON.parse(readFileSync(`${HERE}data.json`, 'utf8')) } catch { return {} } })();
   if (JSON.stringify([old.static, old.video]) === JSON.stringify([data.static, data.video])) data.stamp = old.stamp;   // 대본 그대로면 앱이 다시 받지 않게
   let s = readFileSync(`${PROTO}/prompter/prompter.src.html`, 'utf8');
@@ -33,7 +42,11 @@ function build() {
   s = s.replace(/<title>[\s\S]*?(?=<link rel="stylesheet")/, head).replace('/*STATIC*/null', JSON.stringify(data.static)).replace('/*VIDEO*/null', JSON.stringify(data.video)).replace('/*STAMP*/0', data.stamp).replace('/*BUILD*/', data.build);
   writeFileSync(`${HERE}index.html`, s);
   const g = (...a) => execFileSync('git', ['-c', 'user.name=IlYeoLee', '-c', 'user.email=star1004da@gmail.com', ...a], { cwd: HERE, stdio: 'inherit' });
-  g('add', '-A'); if (!execFileSync('git', ['status', '--porcelain'], { cwd: HERE }).toString().trim()) return console.log('바뀐 것 없음'); g('commit', '-qm', `대본 자동 반영 ${new Date().toTimeString().slice(0, 5)}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`); g('push', '-q');
+  g('add', '-A');
+  if (execFileSync('git', ['status', '--porcelain'], { cwd: HERE }).toString().trim()) g('commit', '-qm', `대본 자동 반영 ${new Date().toTimeString().slice(0, 5)}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`);
+  else if (!/ahead/.test(execFileSync('git', ['status', '-sb'], { cwd: HERE }).toString())) return console.log('바뀐 것 없음');
+  // 푸시가 가끔 몇 분씩 멈춰서, 60초 넘으면 끊고 다시(최대 3번)
+  for (let k = 0; k < 3; k++) try { execFileSync('git', ['push', '-q'], { cwd: HERE, stdio: 'inherit', timeout: 60000 }); break } catch (e) { console.error('푸시 재시도', k + 1) }
   console.log('올림', new Date().toTimeString().slice(0, 8));
 }
 const mt = () => statSync(`${PROTO}/film.html`).mtimeMs + statSync(`${PROTO}/prompter/prompter.src.html`).mtimeMs;
