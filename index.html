@@ -116,7 +116,7 @@ let STATIC = {"p0":["코안은 판단은 제가 직접 하고, 반복은 Claude 
 let pending = null, stamp = 1793168396148;
 async function poll() {
   try { const d = await (await fetch('data.json?t=' + Date.now(), { cache: 'no-store' })).json(); if (d.stamp > stamp) pending = d } catch {}
-  if (pending && !(isVid(pi) && playing)) { STATIC = pending.static; VIDEO = pending.video; stamp = pending.stamp; pending = null; line = Math.min(line, lines().length - 1); last = -1; $('upd').textContent = '대본 업데이트됨 ' + new Date().toTimeString().slice(0, 5) }
+  if (pending && !(isVid(pi) && playing)) { STATIC = pending.static; VIDEO = pending.video; stamp = pending.stamp; pending = null; tabs(); line = Math.min(line, lines().length - 1); last = -1; $('upd').textContent = '대본 업데이트됨 ' + new Date().toTimeString().slice(0, 5) }
 }
 setInterval(poll, 30000);
 const PAGES = [
@@ -131,7 +131,7 @@ const now = () => playing ? base + (performance.now() - t0) / 1000 : base;
 const setT = s => { base = Math.max(0, Math.min(V().end, s)); t0 = performance.now() };
 const idxAt = s => { const c = V().cues; let k = 0; while (k + 1 < c.length && c[k + 1][0] <= s + 1e-3) k++; return k };
 
-$('pages').innerHTML = PAGES.map((p, i) => `<button class="pg${isVid(i) ? ' vid' : ''}" data-i="${i}"><b>${p[1]}</b>${p[2]}</button>`).join('');
+const tabs = () => { $('pages').innerHTML = PAGES.map((p, i) => `<button class="pg${isVid(i) ? ' vid' : ''}" data-i="${i}" aria-current="${i === pi}"><b>${p[1]}</b>${p[2]}</button>`).join('') }; tabs();
 $('pages').onclick = e => { const b = e.target.closest('.pg'); if (b) openPage(+b.dataset.i, false) };
 
 let enterUntil = 0;
