@@ -5,6 +5,8 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { createServer } from 'node:http';
+import { copyFileSync } from 'node:fs';
 const PROTO = '/private/tmp/claude-501/-Users-iil-yeo/20d535de-b5eb-4a64-aad5-93723b5e88bd/scratchpad/proto', HERE = fileURLToPath(new URL('.', import.meta.url));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function deck() {   // film.html의 PAGES(00~04 대본)
@@ -51,4 +53,24 @@ function build() {
 }
 const mt = () => statSync(`${PROTO}/film.html`).mtimeMs + statSync(`${PROTO}/prompter/prompter.src.html`).mtimeMs;
 if (!process.argv.includes('--watch')) build();
-else for (let seen = 0; ; await sleep(30000)) { const m = mt(); if (m !== seen) { seen = m; try { build() } catch (e) { console.error('실패', e.message) } } }
+else {
+  // 대본 편집 페이지: http://localhost:8803 — 문장을 고치고 칸을 벗어나면 film.html에 바로 저장(저장 전 백업 film-edit-backup.html)
+  createServer((req, res) => {
+    res.setHeader('access-control-allow-origin', '*');   // film.html(8802) 대본 모아 보기의 수정 버튼에서도 저장
+    if (req.method === 'POST') { let b = ''; req.on('data', c => b += c); req.on('end', () => {
+      try { const { from, to } = JSON.parse(b), f = `${PROTO}/film.html`, s = readFileSync(f, 'utf8'), clean = to.replace(/'/g, '’').replace(/\n/g, ' ').trim();
+        const n = s.split(`'${from}'`).length - 1; if (n !== 1) throw new Error(n ? '같은 문장이 여러 곳에 있어요' : '원래 문장을 못 찾았어요(다른 곳에서 바뀜, 새로고침)');
+        copyFileSync(f, `${PROTO}/film-edit-backup.html`); writeFileSync(f, s.replace(`'${from}'`, `'${clean}'`)); res.end(JSON.stringify({ ok: 1, text: clean }));
+      } catch (e) { res.statusCode = 400; res.end(JSON.stringify({ err: e.message })) } }); return }
+    const d = deck(), v = videoTimes(), names = { p0: '00 AI 워크플로우', p1: '01 문제 정의', p2: '02 경쟁 서비스', p3: '03 코안 소개', p4: '04 비주얼 시스템 (영상)', 1: '05 결정 정리 (영상)', 2: '06 함께 정하기 (영상)', 3: '07 각자 확인 (영상)' };
+    const secs = { ...Object.fromEntries(['p0', 'p1', 'p2', 'p3'].map(k => [k, d[k].reduce((a, t) => a + (sp(t) + .9) * 1.1, 0)])), p4: v.p4.end, 1: v[1].end, 2: v[2].end, 3: v[3].end };
+    const tot = Object.values(secs).reduce((a, b) => a + b, 0), fmt = x => `${Math.floor(x / 60)}분 ${Math.round(x % 60)}초`, esc = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    const blocks = ['p0', 'p1', 'p2', 'p3', 'p4', '1', '2', '3'].map(k => { const L = ['p0', 'p1', 'p2', 'p3', 'p4'].includes(k) ? d[k] : v[k].cues.map(c => c[1]);
+      return `<section><h2>${names[k]} <small>약 ${Math.round(secs[k])}초</small></h2>${L.map(t => `<textarea data-from="${esc(t)}" rows="2">${esc(t)}</textarea>`).join('')}</section>` }).join('');
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    res.end(`<!doctype html><meta charset="utf-8"><title>코안 대본 편집</title><style>body{font:16px/1.6 -apple-system,"Apple SD Gothic Neo",sans-serif;max-width:860px;margin:0 auto;padding:24px 20px 80px;background:#f6f7f9;color:#14171c}h1{font-size:22px}h1 small,h2 small{color:#7d8693;font-weight:500;font-size:14px}h2{font-size:17px;margin:28px 0 8px}textarea{display:block;width:100%;box-sizing:border-box;margin:6px 0;padding:10px 12px;border:1px solid #d7dbe1;border-radius:10px;font:inherit;resize:vertical;background:#fff}textarea.saved{border-color:#2fb36b}textarea.err{border-color:#e5484d}#st{position:fixed;bottom:16px;right:16px;background:#14171c;color:#fff;padding:8px 14px;border-radius:10px;font-size:14px}</style>
+<h1>코안 대본 편집 <small>전체 약 ${fmt(tot)} · 칸을 벗어나면 저장, 휴대폰 앱엔 1분 안에 반영 · 영상 페이지 시간은 문장 길이로 계산</small></h1>${blocks}<div id="st">고칠 문장을 누르세요</div>
+<script>document.querySelectorAll('textarea').forEach(t=>t.onchange=async()=>{const st=document.getElementById('st');st.textContent='저장 중';const r=await fetch('/',{method:'POST',body:JSON.stringify({from:t.dataset.from,to:t.value})});const j=await r.json();if(j.ok){t.dataset.from=j.text;t.value=j.text;t.className='saved';st.textContent='저장됨. 휴대폰 반영 대기 중'}else{t.className='err';st.textContent=j.err}})</script>`);
+  }).listen(8803);
+  for (let seen = 0; ; await sleep(5000)) { const m = mt(); if (m !== seen) { seen = m; try { build() } catch (e) { console.error('실패', e.message) } } }
+}
