@@ -15,17 +15,17 @@ function deck() {   // film.html의 PAGES(00~04 대본)
 }
 function build() {
   execFileSync('rm', ['-f', `${PROTO}/cues.json`]);
-  for (const c of ['1', '2', '3']) execFileSync('nice', ['-n', '19', 'node', 'timing-rt.mjs', c], { cwd: PROTO, stdio: 'inherit' });
+  for (const c of ['p4', '1', '2', '3']) execFileSync('nice', ['-n', '19', 'node', 'timing-rt.mjs', c], { cwd: PROTO, stdio: 'inherit' });
   const data = { stamp: Date.now(), static: deck(), video: JSON.parse(readFileSync(`${PROTO}/cues.json`, 'utf8')) };
   const old = (() => { try { return JSON.parse(readFileSync(`${HERE}data.json`, 'utf8')) } catch { return {} } })();
-  if (JSON.stringify([old.static, old.video]) === JSON.stringify([data.static, data.video])) return console.log('바뀐 대본 없음');
-  writeFileSync(`${HERE}data.json`, JSON.stringify(data));
+  if (JSON.stringify([old.static, old.video]) === JSON.stringify([data.static, data.video])) data.stamp = old.stamp;   // 대본 그대로면 앱이 다시 받지 않게
+  else writeFileSync(`${HERE}data.json`, JSON.stringify(data));
   let s = readFileSync(`${PROTO}/prompter/prompter.src.html`, 'utf8');
   const head = readFileSync(`${HERE}index.html`, 'utf8').match(/<title>[\s\S]*?(?=<link rel="stylesheet")/)[0];
   s = s.replace(/<title>[\s\S]*?(?=<link rel="stylesheet")/, head).replace('/*STATIC*/null', JSON.stringify(data.static)).replace('/*VIDEO*/null', JSON.stringify(data.video)).replace('/*STAMP*/0', data.stamp);
   writeFileSync(`${HERE}index.html`, s);
   const g = (...a) => execFileSync('git', ['-c', 'user.name=IlYeoLee', '-c', 'user.email=star1004da@gmail.com', ...a], { cwd: HERE, stdio: 'inherit' });
-  g('add', '-A'); g('commit', '-qm', `대본 자동 반영 ${new Date().toTimeString().slice(0, 5)}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`); g('push', '-q');
+  g('add', '-A'); if (!execFileSync('git', ['status', '--porcelain'], { cwd: HERE }).toString().trim()) return console.log('바뀐 것 없음'); g('commit', '-qm', `대본 자동 반영 ${new Date().toTimeString().slice(0, 5)}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`); g('push', '-q');
   console.log('올림', new Date().toTimeString().slice(0, 8));
 }
 const mt = () => statSync(`${PROTO}/film.html`).mtimeMs + statSync(`${PROTO}/prompter/prompter.src.html`).mtimeMs;

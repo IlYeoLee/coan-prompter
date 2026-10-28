@@ -13,7 +13,7 @@ try {
   await send('Page.navigate', { url: `http://localhost:8802/film.html?ch=${ch}` });
   let t0 = 0; const cues = [];
   for (;;) {
-    const [end, x] = await ev(`[$('#again').classList.contains('on'),$('#sctx').textContent]`) || [];
+    const [end, x] = await ev(`[$('#again').classList.contains('on')||String((window.LOG||[]).at(-1)||'').includes('] 끝 '),$('#sctx').textContent]`) || [];   // 장=다시 보기, 덱 페이지=LOG 끝
     const t = Date.now();
     if (x && !t0) t0 = t;
     if (x && x !== cues.at(-1)?.[1]) cues.push([+((t - t0) / 1000).toFixed(2), x]);
