@@ -23,9 +23,10 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--fg);font-family:var(--sans);overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
-.app{height:100%;display:grid;grid-template-rows:auto auto 1fr auto;gap:10px;
+.app{height:100%;display:grid;grid-template-rows:auto auto 1fr auto;grid-template-columns:minmax(0,1fr);gap:10px;
   padding:max(10px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 .pages{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
 .pages::-webkit-scrollbar{display:none}
@@ -54,8 +55,8 @@ body{background:var(--bg);color:var(--fg);font-family:var(--sans);overflow:hidde
 .mic.on i{background:var(--now);box-shadow:0 0 0 4px rgba(47,210,122,.18)}
 .heard{color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:rtl;text-align:left;flex:1;min-width:0}
 .clock{font-variant-numeric:tabular-nums;color:var(--faint);font-size:13px;text-align:right}
-.ctl{display:grid;grid-template-columns:1fr 1fr 1.6fr 1fr 1fr;gap:8px;margin-top:10px}
-.ctl button{height:58px;border-radius:14px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:500 15px var(--sans)}
+.ctl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) minmax(0,1.6fr) repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.ctl button{min-width:0;padding:0;height:58px;border-radius:14px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:500 15px var(--sans)}
 .ctl button:active{background:var(--line)}
 .ctl button:disabled{opacity:.35}
 .ctl .main{background:var(--go);border-color:var(--go);font-weight:700;font-size:17px}
@@ -160,7 +161,6 @@ function draw() {
   $('app').classList.toggle('paused', vid && !playing);
 }
 const esc = t => t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
-(function loop() { draw(); requestAnimationFrame(loop) })();
 
 // ---- 음성인식(브라우저 기본 기능, 무료). 지금 문장의 끝부분을 말했으면 다음 문장으로 ----
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -225,6 +225,7 @@ const wake = () => navigator.wakeLock?.request('screen').catch(() => {});
 document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && wake());
 document.addEventListener('click', wake, { once: true });
 openPage(0, false);
+(function loop() { draw(); requestAnimationFrame(loop) })();   // 모든 변수가 준비된 뒤 시작
 </script>
 </body>
 </html>
