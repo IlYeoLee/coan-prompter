@@ -79,8 +79,10 @@ else {
   // 대본 편집 페이지: http://localhost:8803 — 문장을 고치고 칸을 벗어나면 film.html에 바로 저장(저장 전 백업 film-edit-backup.html)
   // 대본 편집 페이지 http://localhost:8803 — 고친 뒤 [저장]을 눌러야 film.html에 반영. 저장 직전 버전을 히스토리에 쌓아 [되돌리기]로 하나씩 복원
   const F = `${PROTO}/film.html`, HIST = `${PROTO}/film-edit-history`; mkdirSync(HIST, { recursive: true });
-  function applyEdit(s, from, to) {
+  function applyEdit(s, from, to, pre = '', post = '', nl = false) {
+    if (nl) { from = from.replace(/\n/g, '\\n'); to = to.trim().replace(/\n/g, '\\n') }   // 왼쪽 설명은 줄바꿈 유지(소스엔 \n 글자로)
     const clean = to.replace(/'/g, '’').replace(/\n/g, ' ').trim();
+    if (pre || post) { const k = `${pre}'${from}'${post}`, n = s.split(k).length - 1; if (!clean) throw new Error('왼쪽 설명은 비울 수 없어요'); if (n !== 1) throw new Error(`원래 문구를 못 찾았어요(새로고침): ${from.slice(0, 20)}…`); return s.replace(k, `${pre}'${clean}'${post}`) }
     if (!clean) {   // 빈칸 = 그 줄 삭제(덱 페이지 00~04만. 영상 장 문장은 화면 동작이 묶여 있어 못 지움)
       const k = s.indexOf(`['${from}'`); if (k < 0 || s.split(`['${from}'`).length !== 2) throw new Error(`덱 페이지(00~04) 문장만 지울 수 있어요: ${from.slice(0, 20)}…`);
       let e = s.indexOf(']', k + from.length + 2) + 1, b = k;
@@ -99,7 +101,7 @@ else {
         const q = JSON.parse(body || '{}'), cur = readFileSync(F, 'utf8'), hist = readdirSync(HIST).sort();
         if (q.undo) { if (!hist.length) throw new Error('되돌릴 버전이 없어요'); const last = `${HIST}/${hist.at(-1)}`; writeFileSync(F, readFileSync(last)); rmSync(last); return send({ ok: 1, left: hist.length - 1 }) }
         const edits = q.edits || (q.from != null ? [{ from: q.from, to: q.to }] : []); if (!edits.length) throw new Error('바뀐 문장이 없어요');
-        let s = cur; for (const e of edits) s = applyEdit(s, e.from, e.to);
+        let s = cur; for (const e of edits) s = applyEdit(s, e.from, e.to, e.pre, e.post, e.nl);
         writeFileSync(`${HIST}/${Date.now()}.html`, cur); writeFileSync(F, s);
         send({ ok: 1, n: edits.length, left: hist.length + 1, text: edits.length === 1 ? edits[0].to.replace(/'/g, '’').trim() : undefined, deleted: edits.length === 1 && !edits[0].to.trim() ? 1 : undefined });
       } catch (e) { send({ err: e.message }, 400) } }); return }
@@ -107,8 +109,11 @@ else {
     const secs = { ...Object.fromEntries(['p0', 'p1', 'p2', 'p3'].map(k => [k, d[k].reduce((a, t) => a + (sp(t) + .9) * 1.1, 0)])), p4: v.p4.end, 1: v[1].end, 2: v[2].end, 3: v[3].end };
     const tot = Object.values(secs).reduce((a, b) => a + b, 0), fmt = x => `${Math.floor(x / 60)}분 ${Math.round(x % 60)}초`, esc = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
     const HN = hints(), deckKeys = ['p0', 'p1', 'p2', 'p3', 'p4'], nh = readdirSync(HIST).length;
+    const fs = readFileSync(F, 'utf8'), ci = fs.indexOf('const CH_='), CH = eval('(' + fs.slice(fs.indexOf('{', ci), fs.indexOf('};', ci) + 1) + ')');
+    const fld = (label, v, pre, post) => `<label class="lab">${label}</label><div class="row"><textarea data-from="${esc(v)}" data-pre="${pre}" data-post="${post}" data-nl="1" rows="2">${esc(v)}</textarea></div>`;
+    const rail = k => { const c = CH[k]; if (!c) return ''; return `<details class="rail"><summary>왼쪽 설명 (제목·요약·단계 3개)</summary>${fld('장 제목', c.nm, 'nm:', '')}${fld('요약', c.sum, 'sum:', '')}${c.beats.map((b, i) => fld(`단계 ${'①②③'[i]} 제목`, b[0], '[', ',') + fld(`단계 ${'①②③'[i]} 설명`, b[1], ',', ']')).join('')}</details>` };
     const blocks = ['p0', 'p1', 'p2', 'p3', 'p4', '1', '2', '3'].map(k => { const L = deckKeys.includes(k) ? d[k] : v[k].cues.map(c => c[1]);
-      return `<section><h2>${names[k]} <small>약 ${Math.round(secs[k])}초</small></h2>${L.map((t, i) => `${HN[k]?.[i] ? `<div class="hint">화면 · ${esc(HN[k][i])}</div>` : ''}<div class="row"><textarea data-from="${esc(t)}" rows="2">${esc(t)}</textarea>${deckKeys.includes(k) ? '<button class="del" type="button">삭제</button>' : ''}</div>`).join('')}</section>` }).join('');
+      return `<section><h2>${names[k]} <small>약 ${Math.round(secs[k])}초</small></h2>${rail(k)}${L.map((t, i) => `${HN[k]?.[i] ? `<div class="hint">화면 · ${esc(HN[k][i])}</div>` : ''}<div class="row"><textarea data-from="${esc(t)}" rows="2">${esc(t)}</textarea>${deckKeys.includes(k) ? '<button class="del" type="button">삭제</button>' : ''}</div>`).join('')}</section>` }).join('');
     res.setHeader('content-type', 'text/html; charset=utf-8');
     res.end(`<!doctype html><meta charset="utf-8"><title>코안 대본 편집</title><style>
 body{font:16px/1.6 -apple-system,"Apple SD Gothic Neo",sans-serif;max-width:900px;margin:0 auto;padding:0 20px 80px;background:#f6f7f9;color:#14171c}
@@ -120,6 +125,7 @@ header button{border:0;border-radius:10px;padding:10px 16px;font:700 15px inheri
 h2{font-size:17px;margin:28px 0 8px}.row{display:flex;gap:8px;align-items:flex-start;margin:6px 0}
 textarea{flex:1;box-sizing:border-box;padding:10px 12px;border:1px solid #d7dbe1;border-radius:10px;font:inherit;resize:vertical;background:#fff}
 textarea.changed{border-color:#3d8bff;background:#f3f8ff}.row.gone textarea{text-decoration:line-through;color:#b0b6bf;background:#f1f2f4}
+.rail{background:#fff;border:1px solid #d7dbe1;border-radius:12px;padding:8px 14px 12px;margin:8px 0 14px}.rail summary{cursor:pointer;font-weight:700;font-size:15px;color:#3d6fbf;padding:4px 0}.lab{display:block;font-size:13px;color:#7d8693;margin:10px 0 -2px 4px}
 .hint{font-size:13px;color:#3d6fbf;margin:12px 0 -2px 4px}
 .del{border:1px solid #d7dbe1;background:#fff;border-radius:10px;padding:8px 12px;font:500 14px inherit;color:#c2373b;cursor:pointer}.row.gone .del{color:#14171c}
 </style><header><h1>코안 대본 편집 <small>전체 약 ${fmt(tot)}</small></h1><button id="undo" type="button" ${nh ? '' : 'disabled'}>되돌리기${nh ? ' (' + nh + ')' : ''}</button><button id="save" type="button" disabled>저장</button><div id="st">고친 문장은 파란색, 지울 문장은 줄이 그어져요. [저장]을 눌러야 반영돼요.</div></header>${blocks}
@@ -129,7 +135,7 @@ const pend=()=>[...document.querySelectorAll('.row')].filter(r=>r.classList.cont
 const upd=()=>{const n=pend().length;save.disabled=!n;save.textContent=n?'저장 ('+n+')':'저장'};
 document.querySelectorAll('textarea').forEach(t=>t.oninput=()=>{t.classList.toggle('changed',t.value.trim()!==t.dataset.from);upd()});
 document.querySelectorAll('.del').forEach(b=>b.onclick=()=>{const r=b.parentElement;r.classList.toggle('gone');b.textContent=r.classList.contains('gone')?'취소':'삭제';upd()});
-save.onclick=async()=>{const edits=pend().map(r=>{const t=r.querySelector('textarea');return{from:t.dataset.from,to:r.classList.contains('gone')?'':t.value}});
+save.onclick=async()=>{const edits=pend().map(r=>{const t=r.querySelector('textarea');return{from:t.dataset.from,to:r.classList.contains('gone')?'':t.value,pre:t.dataset.pre||'',post:t.dataset.post||'',nl:!!t.dataset.nl}});
  st.textContent='저장 중';const j=await(await fetch('/',{method:'POST',body:JSON.stringify({edits})})).json();
  if(j.err){st.textContent='저장 못 했어요: '+j.err;return}st.textContent=j.n+'개 저장했어요. 휴대폰 앱엔 1분 안에 반영돼요';setTimeout(()=>location.reload(),900)};
 undo.onclick=async()=>{const j=await(await fetch('/',{method:'POST',body:JSON.stringify({undo:1})})).json();if(j.err){st.textContent=j.err;return}st.textContent='직전 저장을 되돌렸어요';setTimeout(()=>location.reload(),700)};
