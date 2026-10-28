@@ -4,6 +4,7 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 const PROTO = '/private/tmp/claude-501/-Users-iil-yeo/20d535de-b5eb-4a64-aad5-93723b5e88bd/scratchpad/proto', HERE = fileURLToPath(new URL('.', import.meta.url));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function deck() {   // film.html의 PAGES(00~04 대본)
@@ -25,10 +26,11 @@ function build() {
   const data = { stamp: Date.now(), static: deck(), video: JSON.parse(readFileSync(`${PROTO}/cues.json`, 'utf8')) };
   const old = (() => { try { return JSON.parse(readFileSync(`${HERE}data.json`, 'utf8')) } catch { return {} } })();
   if (JSON.stringify([old.static, old.video]) === JSON.stringify([data.static, data.video])) data.stamp = old.stamp;   // 대본 그대로면 앱이 다시 받지 않게
-  else writeFileSync(`${HERE}data.json`, JSON.stringify(data));
   let s = readFileSync(`${PROTO}/prompter/prompter.src.html`, 'utf8');
+  data.build = createHash('md5').update(s).digest('hex').slice(0, 10);   // 화면 코드 버전(바뀌면 앱이 새로고침)
+  writeFileSync(`${HERE}data.json`, JSON.stringify(data));
   const head = readFileSync(`${HERE}index.html`, 'utf8').match(/<title>[\s\S]*?(?=<link rel="stylesheet")/)[0];
-  s = s.replace(/<title>[\s\S]*?(?=<link rel="stylesheet")/, head).replace('/*STATIC*/null', JSON.stringify(data.static)).replace('/*VIDEO*/null', JSON.stringify(data.video)).replace('/*STAMP*/0', data.stamp);
+  s = s.replace(/<title>[\s\S]*?(?=<link rel="stylesheet")/, head).replace('/*STATIC*/null', JSON.stringify(data.static)).replace('/*VIDEO*/null', JSON.stringify(data.video)).replace('/*STAMP*/0', data.stamp).replace('/*BUILD*/', data.build);
   writeFileSync(`${HERE}index.html`, s);
   const g = (...a) => execFileSync('git', ['-c', 'user.name=IlYeoLee', '-c', 'user.email=star1004da@gmail.com', ...a], { cwd: HERE, stdio: 'inherit' });
   g('add', '-A'); if (!execFileSync('git', ['status', '--porcelain'], { cwd: HERE }).toString().trim()) return console.log('바뀐 것 없음'); g('commit', '-qm', `대본 자동 반영 ${new Date().toTimeString().slice(0, 5)}\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`); g('push', '-q');
