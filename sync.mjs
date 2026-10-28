@@ -61,6 +61,13 @@ else {
     res.setHeader('access-control-allow-origin', '*');   // film.html(8802) 대본 모아 보기의 수정 버튼에서도 저장
     if (req.method === 'POST') { let b = ''; req.on('data', c => b += c); req.on('end', () => {
       try { const { from, to } = JSON.parse(b), f = `${PROTO}/film.html`, s = readFileSync(f, 'utf8'), clean = to.replace(/'/g, '’').replace(/\n/g, ' ').trim();
+        if (!clean) {   // 빈칸으로 저장 = 그 줄 삭제(덱 페이지 00~04만. 영상 장 문장은 화면 동작이 묶여 있어 못 지움)
+          const k = s.indexOf(`['${from}'`); if (k < 0 || s.split(`['${from}'`).length !== 2) throw new Error('덱 페이지(00~04) 문장만 지울 수 있어요');
+          let e = s.indexOf(']', k + from.length + 2) + 1, b = k;
+          if (s[e] === ',') e++; else { b = s.lastIndexOf(',', k); }   // 마지막 줄이면 앞 쉼표를 지움
+          while (b > 0 && /\s/.test(s[b - 1]) && s[b] !== ',') b--;
+          copyFileSync(f, `${PROTO}/film-edit-backup.html`); writeFileSync(f, s.slice(0, b) + s.slice(e)); res.end(JSON.stringify({ ok: 1, text: '', deleted: 1 })); return;
+        }
         const n = s.split(`'${from}'`).length - 1; if (n !== 1) throw new Error(n ? '같은 문장이 여러 곳에 있어요' : '원래 문장을 못 찾았어요(다른 곳에서 바뀜, 새로고침)');
         copyFileSync(f, `${PROTO}/film-edit-backup.html`); writeFileSync(f, s.replace(`'${from}'`, `'${clean}'`)); res.end(JSON.stringify({ ok: 1, text: clean }));
       } catch (e) { res.statusCode = 400; res.end(JSON.stringify({ err: e.message })) } }); return }
